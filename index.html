@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>柜员打字训练系统 - 小键盘 (平板优化版)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            user-select: none;
+        }
+
+        body {
+            color: #fff;
+            overflow: hidden;
+            background-color: #0d0d16;
+        }
+
+        /* -------------------------------------
+           核心规范：静态流体背景及5个特定圆点
+        -------------------------------------- */
+        .fluid-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            background: #0d0d16;
+        }
+
+        .bg-circle {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.5;
+            transition: all 1s ease;
+        }
+
+        /* 翠绿色 (左上) */
+        .circle-emerald {
+            background: #50C878;
+            width: max(35vw, 35vh);
+            height: max(35vw, 35vh);
+            top: -10%;
+            left: -10%;
+        }
+
+        /* 紫罗兰色 (右上) */
+        .circle-violet {
+            background: #8A2BE2;
+            width: max(40vw, 40vh);
+            height: max(40vw, 40vh);
+            top: -15%;
+            right: -10%;
+        }
+
+        /* 海蓝色 (左下) */
+        .circle-seablue {
+            background: #006994;
+            width: max(35vw, 35vh);
+            height: max(35vw, 35vh);
+            bottom: -10%;
+            left: -10%;
+        }
+
+        /* 洋红色 (右下) */
+        .circle-magenta {
+            background: #FF00FF;
+            width: max(35vw, 35vh);
+            height: max(35vw, 35vh);
+            bottom: -10%;
+            right: -10%;
+        }
+
+        /* 橙黄色 (正中) */
+        .circle-orangeyellow {
+            background: #FFAC1C;
+            width: max(45vw, 45vh);
+            height: max(45vw, 45vh);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.4;
+        }
+
+        /* -------------------------------------
+           全局玻璃拟物化 UI 样式
+        -------------------------------------- */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        /* 头部 */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: rgba(255,255,255,0.9);
+        }
+
+        /* 主体布局 */
+        .main-content {
+            display: flex;
+            flex: 1;
+            gap: 20px;
+            min-height: 0; /* 让子元素可以滚动 */
+        }
+
+        /* 左侧：题目列表区域 */
+        .left-area {
+            flex: 7;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .list-header {
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            color: #FFAC1C;
+            background: rgba(0,0,0,0.2);
+            border-top-left-radius: 16px;
+            border-top-right-radius: 16px;
+        }
+
+        .scroll-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            scroll-behavior: smooth;
+        }
+        
+        /* 隐藏滚动条让平板体验更好 */
+        .scroll-list::-webkit-scrollbar { width: 6px; }
+        .scroll-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 3px; }
+
+        .row {
+            display: flex;
+            align-items: center;
+            font-size: max(2vw, 24px);
+            padding: 12px 20px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            transition: background 0.2s;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+        }
+
+        .row.active {
+            background: rgba(255, 172, 28, 0.3);
+            border: 1px solid rgba(255, 172, 28, 0.6);
+            transform: scale(1.02);
+            box-shadow: 0 4px 15px rgba(255, 172, 28, 0.2);
+        }
+        
+        .row.correct {
+            color: #50C878;
+        }
+
+        .line-num {
+            width: 10%;
+            text-align: right;
+            padding-right: 20px;
+            color: rgba(255,255,255,0.5);
+            border-right: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .target-num {
+            width: 45%;
+            text-align: right;
+            padding-right: 20px;
+            letter-spacing: 2px;
+        }
+
+        .input-area {
+            width: 45%;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        /* 专门为平板优化的输入框，调出数字键盘 */
+        .typing-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #fff;
+            font-size: inherit;
+            font-family: inherit;
+            font-weight: inherit;
+            letter-spacing: 2px;
+            display: none;
+        }
+        
+        .row.active .typing-input {
+            display: block;
+        }
+        
+        .typing-input.error {
+            color: #FF00FF;
+        }
+
+        /* 右侧：信息与设置区域 */
+        .right-area {
+            flex: 3;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+
+        .info-panel, .settings-panel {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .panel-title {
+            text-align: center;
+            font-size: 1.1rem;
+            color: #8A2BE2;
+            text-shadow: 0 0 10px rgba(138,43,226,0.5);
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            font-size: 0.95rem;
+        }
+        
+        .info-grid .full-width {
+            grid-column: span 2;
+        }
+
+        .info-item span {
+            color: rgba(255,255,255,0.7);
+        }
+        .info-item strong {
+            color: #fff;
+            font-family: monospace;
+            font-size: 1.1rem;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.9rem;
+        }
+
+        .setting-row input[type="number"], .setting-row input[type="text"], .setting-row select {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 6px;
+            width: 100px;
+            outline: none;
+        }
+
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+            font-size: 0.85rem;
+        }
+
+        /* 底部控制栏 */
+        .bottom-controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            padding: 15px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            backdrop-filter: blur(5px);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 0 15px rgba(255,255,255,0.2);
+        }
+
+        .btn-primary {
+            background: rgba(80, 200, 120, 0.4);
+            border-color: #50C878;
+        }
+        .btn-primary:hover {
+            background: rgba(80, 200, 120, 0.6);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="fluid-bg">
+        <div class="bg-circle circle-emerald"></div>
+        <div class="bg-circle circle-violet"></div>
+        <div class="bg-circle circle-seablue"></div>
+        <div class="bg-circle circle-magenta"></div>
+        <div class="bg-circle circle-orangeyellow"></div>
+    </div>
+
+    <div class="app-container">
+        
+        <header class="glass-panel">
+            <div>柜员打字训练系统 - 小键盘</div>
+            <div style="font-size: 0.9rem; color: #50C878;">✓ 设备状态: 平板触控就绪</div>
+        </header>
+
+        <div class="main-content">
+            
+            <div class="left-area glass-panel">
+                <div class="list-header" id="status-text">练习区域 (未开始)</div>
+                <div class="scroll-list" id="list-container">
+                    </div>
+            </div>
+
+            <div class="right-area">
+                
+                <div class="info-panel glass-panel">
+                    <div class="panel-title">信息区域</div>
+                    <div class="info-grid">
+                        <div class="info-item"><span>倒计时:</span> <strong id="val-timer">0 秒</strong></div>
+                        <div class="info-item"><span>总数:</span> <strong id="val-total">200</strong></div>
+                        <div class="info-item"><span>正确数:</span> <strong id="val-correct">0</strong></div>
+                        <div class="info-item"><span>正确率:</span> <strong id="val-acc">0.00%</strong></div>
+                        <div class="info-item"><span>错误数:</span> <strong id="val-error">0</strong></div>
+                        <div class="info-item"><span>错误率:</span> <strong id="val-err-rate">0.00%</strong></div>
+                        <div class="info-item full-width"><span>速度:</span> <strong id="val-speed">0.00 行/秒 / 0.00 字/秒</strong></div>
+                        <div class="info-item"><span>进度:</span> <strong id="val-progress">0 / 200</strong></div>
+                        <div class="info-item"><span>耗时:</span> <strong id="val-elapsed">0 秒</strong></div>
+                    </div>
+                </div>
+
+                <div class="settings-panel glass-panel">
+                    <div class="panel-title">设置区域</div>
+                    <div class="setting-row">
+                        <span>练习时长:</span>
+                        <input type="number" id="set-time" value="2000"> 秒
+                    </div>
+                    <div class="setting-row">
+                        <span>数字设置:</span>
+                        <select id="set-type">
+                            <option>不包含小数点</option>
+                            <option>包含小数点</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span>范围设置:</span>
+                        <input type="number" id="set-min" value="100000" style="width:70px;"> 到
+                        <input type="number" id="set-max" value="9999999" style="width:70px;">
+                    </div>
+                    <div class="setting-row">
+                        <span>数量设置:</span>
+                        <input type="number" id="set-qty" value="200">
+                    </div>
+                    
+                    <div class="checkbox-grid">
+                        <label><input type="checkbox" checked> 包含加减乘除</label>
+                        <label><input type="checkbox"> 手动翻页</label>
+                        <label><input type="checkbox"> 盲打设置</label>
+                        <label><input type="checkbox" checked> 自动翻页</label>
+                        <label><input type="checkbox" checked> 定时结束</label>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="bottom-controls glass-panel">
+            <button class="btn-primary" id="btn-start" onclick="toggleStart()">开始练习</button>
+            <button onclick="resetTraining()">重新开始</button>
+            <button onclick="alert('题库导入功能在本地运行环境下已就绪。')">导入题库</button>
+            <button onclick="alert('成绩单已生成并准备导出。')">导出成绩</button>
+            <button>上一页</button>
+            <button>下一页</button>
+        </div>
+
+    </div>
+
+    <script>
+        // 核心状态数据
+        let isPlaying = false;
+        let numbersList = [];
+        let currentIndex = 0;
+        let totalCount = 200;
+        
+        let stats = {
+            startTime: null,
+            timerId: null,
+            elapsed: 0,
+            correct: 0,
+            error: 0,
+            totalChars: 0
+        };
+
+        const listContainer = document.getElementById('list-container');
+
+        // 生成带有千分位逗号的随机数
+        function generateNumber(min, max) {
+            let num = Math.floor(Math.random() * (max - min + 1)) + min;
+            return num.toLocaleString('en-US');
+        }
+
+        // 初始化列表UI
+        function initList() {
+            listContainer.innerHTML = '';
+            numbersList = [];
+            totalCount = parseInt(document.getElementById('set-qty').value) || 200;
+            let min = parseInt(document.getElementById('set-min').value) || 100000;
+            let max = parseInt(document.getElementById('set-max').value) || 9999999;
+            
+            document.getElementById('val-total').innerText = totalCount;
+
+            for(let i=0; i<totalCount; i++) {
+                let numStr = generateNumber(min, max);
+                numbersList.push({ target: numStr, raw: numStr.replace(/,/g, '') });
+                
+                let row = document.createElement('div');
+                row.className = 'row';
+                row.id = 'row-' + i;
+                row.innerHTML = `
+                    <div class="line-num">${i + 1}</div>
+                    <div class="target-num">${numStr}</div>
+                    <div class="input-area">
+                        <input type="tel" class="typing-input" id="input-${i}" autocomplete="off">
+                    </div>
+                `;
+                listContainer.appendChild(row);
+                
+                // 绑定输入事件监听
+                let inputField = row.querySelector('.typing-input');
+                inputField.addEventListener('input', (e) => handleInput(e, i));
+            }
+        }
+
+        // 处理用户键盘输入逻辑
+        function handleInput(e, index) {
+            if(!isPlaying) return;
+            if(index !== currentIndex) return;
+
+            let inputObj = e.target;
+            let typed = inputObj.value;
+            let targetRaw = numbersList[index].raw;
+            let targetStr = numbersList[index].target;
+
+            // 如果当前输入并非目标的前缀，计为错误 (简单错误检测逻辑)
+            if(!targetRaw.startsWith(typed)) {
+                inputObj.classList.add('error');
+                stats.error++;
+            } else {
+                inputObj.classList.remove('error');
+            }
+            
+            // 完全匹配
+            if(typed === targetRaw) {
+                stats.correct++;
+                stats.totalChars += targetStr.length; // 按格式化后的字符算
+                
+                let row = document.getElementById('row-' + index);
+                row.classList.remove('active');
+                row.classList.add('correct');
+                inputObj.disabled = true; // 锁定已完成输入框
+
+                currentIndex++;
+                updateStatsUI();
+
+                if(currentIndex < totalCount) {
+                    activateRow(currentIndex);
+                } else {
+                    endTraining();
+                }
+            }
+        }
+
+        // 激活指定行，并将焦点移动到输入框以便平板唤出键盘
+        function activateRow(index) {
+            let row = document.getElementById('row-' + index);
+            row.classList.add('active');
+            
+            let inputField = document.getElementById('input-' + index);
+            inputField.focus();
+            
+            // 确保该行在视野中间 (平滑滚动)
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // 开始/暂停 切换
+        function toggleStart() {
+            let btn = document.getElementById('btn-start');
+            if(!isPlaying) {
+                if(currentIndex === 0 && numbersList.length === 0) {
+                    initList();
+                }
+                isPlaying = true;
+                btn.innerText = "暂停练习";
+                document.getElementById('status-text').innerText = "练习区域 (正在练习)";
+                
+                if(!stats.startTime) {
+                    stats.startTime = Date.now() - (stats.elapsed * 1000);
+                }
+                stats.timerId = setInterval(tick, 1000);
+                activateRow(currentIndex);
+            } else {
+                isPlaying = false;
+                btn.innerText = "继续练习";
+                document.getElementById('status-text').innerText = "练习区域 (已暂停)";
+                clearInterval(stats.timerId);
+                stats.startTime = null;
+            }
+        }
+
+        function resetTraining() {
+            isPlaying = false;
+            clearInterval(stats.timerId);
+            document.getElementById('btn-start').innerText = "开始练习";
+            document.getElementById('status-text').innerText = "练习区域 (未开始)";
+            
+            currentIndex = 0;
+            stats = { startTime: null, timerId: null, elapsed: 0, correct: 0, error: 0, totalChars: 0 };
+            updateStatsUI();
+            initList();
+        }
+
+        function endTraining() {
+            isPlaying = false;
+            clearInterval(stats.timerId);
+            document.getElementById('btn-start').innerText = "练习完成";
+            document.getElementById('status-text').innerText = "练习区域 (已结束)";
+            alert("训练结束！总耗时: " + stats.elapsed + "秒");
+        }
+
+        // 每秒时间与统计更新
+        function tick() {
+            stats.elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
+            updateStatsUI();
+        }
+
+        function updateStatsUI() {
+            document.getElementById('val-elapsed').innerText = stats.elapsed + " 秒";
+            document.getElementById('val-correct').innerText = stats.correct;
+            document.getElementById('val-error').innerText = stats.error;
+            document.getElementById('val-progress').innerText = `${currentIndex} / ${totalCount}`;
+            
+            let totalTyped = stats.correct + stats.error;
+            let acc = totalTyped > 0 ? ((stats.correct / totalTyped) * 100).toFixed(2) : 0;
+            let errRate = totalTyped > 0 ? ((stats.error / totalTyped) * 100).toFixed(2) : 0;
+            
+            document.getElementById('val-acc').innerText = acc + "%";
+            document.getElementById('val-err-rate').innerText = errRate + "%";
+
+            if(stats.elapsed > 0) {
+                let linesPerSec = (stats.correct / stats.elapsed).toFixed(2);
+                let charsPerSec = (stats.totalChars / stats.elapsed).toFixed(2);
+                document.getElementById('val-speed').innerText = `${linesPerSec} 行/秒 / ${charsPerSec} 字/秒`;
+            } else {
+                document.getElementById('val-speed').innerText = `0.00 行/秒 / 0.00 字/秒`;
+            }
+        }
+
+        // 阻止移动端页面由于双击或拖拽产生的默认缩放和滑动行为，增强平板App体验
+        document.addEventListener('touchmove', function(event) {
+            if (!event.target.closest('.scroll-list') && !event.target.closest('.right-area')) {
+                event.preventDefault();
+            }
+        }, { passive: false });
+
+        // 初始化
+        window.onload = () => {
+            initList();
+        }
+    </script>
+</body>
+</html>
